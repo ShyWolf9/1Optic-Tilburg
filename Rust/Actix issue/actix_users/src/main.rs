@@ -2,20 +2,37 @@ use actix_web::{get, post, put, web, App, HttpServer, Responder, HttpResponse};
 use serde::{Serialize, Deserialize};
 use sqlx::{PgPool, postgres::PgPoolOptions};
 
-#[derive(Serialize, sqlx::FromRow)]
+use utoipa::{OpenApi, ToSchema};
+use utoipa_swagger_ui::SwaggerUi;
+
+// =====================
+// Models
+// =====================
+
+#[derive(Serialize, sqlx::FromRow, ToSchema)]
 struct User {
     id: i32,
     first_name: String,
     last_name: String,
 }
 
-// For creating or updating a user
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 struct UserInput {
     first_name: String,
     last_name: String,
 }
 
+// =====================
+// Handlers
+// =====================
+
+#[utoipa::path(
+    get,
+    path = "/users",
+    responses(
+        (status = 200, description = "List all users", body = [User])
+    )
+)]
 #[get("/users")]
 async fn users(db: web::Data<PgPool>) -> impl Responder {
     let result = sqlx::query_as::<_, User>(
@@ -33,6 +50,14 @@ async fn users(db: web::Data<PgPool>) -> impl Responder {
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/users",
+    request_body = UserInput,
+    responses(
+        (status = 200, description = "Created user id", body = i32)
+    )
+)]
 #[post("/users")]
 async fn add_user(db: web::Data<PgPool>, user: web::Json<UserInput>) -> impl Responder {
     let result = sqlx::query!(
@@ -52,10 +77,22 @@ async fn add_user(db: web::Data<PgPool>, user: web::Json<UserInput>) -> impl Res
     }
 }
 
+#[utoipa::path(
+    put,
+    path = "/users/{id}",
+    params(
+        ("id" = i32, Path, description = "User id to update")
+    ),
+    request_body = UserInput,
+    responses(
+        (status = 200, description = "User updated"),
+        (status = 404, description = "User not found")
+    )
+)]
 #[put("/users/{id}")]
 async fn update_user(
-    db: web::Data<PgPool>, 
-    path: web::Path<i32>, 
+    db: web::Data<PgPool>,
+    path: web::Path<i32>,
     user: web::Json<UserInput>
 ) -> impl Responder {
     let id = path.into_inner();
@@ -83,6 +120,24 @@ async fn update_user(
     }
 }
 
+// =====================
+// OpenAPI definition
+// =====================
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(users, add_user, update_user),
+    components(schemas(User, UserInput)),
+    tags(
+        (name = "users", description = "User management API")
+    )
+)]
+struct ApiDoc;
+
+// =====================
+// Main
+// =====================
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let pool = PgPoolOptions::new()
@@ -90,7 +145,9 @@ async fn main() -> std::io::Result<()> {
         .await
         .expect("Failed to connect to database");
 
-    println!("Starting server at http://127.0.0.1:8080 ...");
+    println!("Server running at http://127.0.0.1:8080");
+    println!("OpenAPI JSON: http://127.0.0.1:8080/api-doc/openapi.json");
+    println!("Swagger UI:   http://127.0.0.1:8080/swagger-ui/");
 
     HttpServer::new(move || {
         App::new()
@@ -98,9 +155,22 @@ async fn main() -> std::io::Result<()> {
             .service(users)
             .service(add_user)
             .service(update_user)
+            // OpenAPI JSON endpoint
+            .route(
+                "/api-doc/openapi.json",
+                web::get().to(|| async {
+                    HttpResponse::Ok()
+                        .content_type("application/json")
+                        .body(ApiDoc::openapi().to_json().unwrap())
+                }),
+            )
+            // Swagger UI (optional but nice)
+            .service(
+                SwaggerUi::new("/swagger-ui/{_:.*}")
+                    .url("/api-doc/openapi.json", ApiDoc::openapi()),
+            )
     })
     .bind("127.0.0.1:8080")?
     .run()
     .await
 }
-
