@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Single Page Application</title>
+<link rel="modulepreload" href="/frontend-fb4ac904654e348.js" crossorigin="anonymous" integrity="sha384-P+ksDUKUE/V2sxTAFpw4O2BLrJ2iXoFL5HlOqrS5kt1igQ3/WTlFO21proYlVGMX"><link rel="preload" href="/frontend-fb4ac904654e348_bg.wasm" crossorigin="anonymous" integrity="sha384-RkJNYQ/wSPl1h4DIPvF8KQtEkaQJKkj2YpmnKHFYtOBlShU5c93d8RpVSGygNwCx" as="fetch" type="application/wasm"></head>
+<body>
+    <div id="root"></div>
+    <script type="module">
+        import init from './pkg/frontend.js';
+        init();
+    </script>
+
+<script type="module">
+import init, * as bindings from '/frontend-fb4ac904654e348.js';
+const wasm = await init({ module_or_path: '/frontend-fb4ac904654e348_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script></body>
+</html>
